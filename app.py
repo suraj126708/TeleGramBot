@@ -637,16 +637,29 @@ def main():
     def webhook():
         if request.method == "POST":
             update = telegram.Update.de_json(request.get_json(force=True), application.bot)
-            asyncio.run(application.process_update(update))
-            return Response("ok", status=200)
+            try:
+                asyncio.run(application.process_update(update))
+                return Response("ok", status=200)
+            except Exception as e:
+                print("Webhook error:", e)
+                return Response("error", status=500)
         else:
             return Response("not found", status=404)
 
-    # Set webhook
+    # Health check route for '/'
+    @flask_app.route("/")
+    def health():
+        return "CineBot is running! Use the Telegram bot to interact.", 200
+
+    # Set webhook and initialize application
     WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://telegrambot-53po.onrender.com')
-    asyncio.run(application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}"))
+    async def setup():
+        await application.initialize()
+        await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}")
+    asyncio.run(setup())
 
     print("🎬 CineBot is running with Flask webhook server...")
+    print("# For production, consider using a WSGI server like gunicorn or waitress instead of Flask's built-in server.")
     flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
 if __name__ == "__main__":
