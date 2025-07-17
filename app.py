@@ -72,26 +72,54 @@ class MovieBot:
         return results
     
     def get_movies_by_genre(self, genre: str) -> List[Dict]:
-        """Get movies by genre (using predefined searches)"""
+        """Search OMDB for movies by genre, fallback to hardcoded list if needed."""
         genre_searches = {
-            'action': ['John Wick', 'Mad Max', 'Die Hard', 'Terminator', 'Mission Impossible'],
+            'action': ['John Wick', 'Mad Max: Fury Road', 'Die Hard', 'Terminator 2', 'Mission Impossible'],
+            'adventure': ['Indiana Jones', 'Pirates of the Caribbean', 'Jurassic Park', 'The Revenant', 'Life of Pi'],
+            'animation': ['Toy Story', 'Spirited Away', 'Finding Nemo', 'The Lion King', 'Up'],
             'comedy': ['The Hangover', 'Anchorman', 'Superbad', 'Dumb and Dumber', 'Borat'],
-            'drama': ['The Godfather', 'Shawshank Redemption', 'Forrest Gump', 'Goodfellas', 'Scarface'],
+            'crime': ['The Godfather', 'Pulp Fiction', 'Goodfellas', 'The Departed', 'Se7en'],
+            'documentary': ['March of the Penguins', 'Free Solo', 'The Last Dance', 'Blackfish', '13th'],
+            'drama': ['The Shawshank Redemption', 'Forrest Gump', 'Fight Club', 'A Beautiful Mind', 'Whiplash'],
+            'family': ['Home Alone', 'Paddington', 'The Incredibles', 'Matilda', 'Mary Poppins'],
+            'fantasy': ['The Lord of the Rings', 'Harry Potter', 'Pan\'s Labyrinth', 'The Princess Bride', 'Stardust'],
+            'history': ['Schindler\'s List', '12 Years a Slave', 'Lincoln', 'Dunkirk', 'The King\'s Speech'],
             'horror': ['The Shining', 'Halloween', 'Scream', 'The Exorcist', 'It'],
+            'music': ['La La Land', 'Whiplash', 'Bohemian Rhapsody', 'A Star is Born', 'Amadeus'],
+            'mystery': ['Gone Girl', 'Zodiac', 'Prisoners', 'The Girl with the Dragon Tattoo', 'Knives Out'],
             'romance': ['Titanic', 'The Notebook', 'Casablanca', 'When Harry Met Sally', 'Pretty Woman'],
             'scifi': ['Star Wars', 'Blade Runner', 'The Matrix', 'Interstellar', 'Alien'],
-            'thriller': ['Se7en', 'The Silence of the Lambs', 'Zodiac', 'Gone Girl', 'Shutter Island']
+            'thriller': ['Se7en', 'The Silence of the Lambs', 'Zodiac', 'Gone Girl', 'Shutter Island'],
+            'war': ['Saving Private Ryan', 'Dunkirk', '1917', 'Hacksaw Ridge', 'Full Metal Jacket'],
+            'western': ['The Good, the Bad and the Ugly', 'Django Unchained', 'Unforgiven', 'True Grit', 'No Country for Old Men']
         }
-        
-        if genre.lower() in genre_searches:
-            movie_titles = genre_searches[genre.lower()]
-            results = []
-            for title in random.sample(movie_titles, min(3, len(movie_titles))):
-                search_results = self.search_movies(title)
-                if search_results:
-                    results.append(search_results[0])
-            return results
-        return []
+        genre_key = genre.lower()
+        # Step 1: Try OMDB search and filter by genre
+        search_results = self.search_movies(genre)
+        filtered = []
+        for movie in search_results:
+            imdb_id = movie.get('imdbID')
+            if imdb_id:
+                details = self.get_movie_details(imdb_id)
+                if details and 'Genre' in details:
+                    genres = [g.strip().lower() for g in details['Genre'].split(',')]
+                    if genre_key in genres:
+                        filtered.append(movie)
+            if len(filtered) >= 3:
+                break
+        # Step 2: If not enough, fill from hardcoded list
+        if len(filtered) < 3 and genre_key in genre_searches:
+            needed = 3 - len(filtered)
+            # Avoid duplicates
+            already_titles = {m.get('Title') for m in filtered}
+            for title in genre_searches[genre_key]:
+                if title not in already_titles:
+                    search = self.search_movies(title)
+                    if search:
+                        filtered.append(search[0])
+                        if len(filtered) >= 3:
+                            break
+        return filtered
     
     def format_movie_info(self, movie_data: Dict) -> str:
         """Format movie information for display"""
