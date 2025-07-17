@@ -644,7 +644,7 @@ def main():
 
     # Set webhook
     WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://telegrambot-53po.onrender.com')
-    application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}")
+    asyncio.run(application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}"))
 
     print("🎬 CineBot is running with Flask webhook server...")
     flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
