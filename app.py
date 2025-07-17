@@ -7,6 +7,9 @@ import random
 from datetime import datetime, timedelta
 import asyncio
 from typing import List, Dict, Optional
+from flask import Flask, request, Response
+import telegram
+import logging
 
 # Configuration
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -610,48 +613,41 @@ def main():
     if not OMDB_API_KEY:
         print("❌ OMDB_API_KEY not found. Please set it in environment variables.")
         return
-    
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
+
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
+
     # Command handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("search", search_command))
-    app.add_handler(CommandHandler("popular", popular_command))
-    app.add_handler(CommandHandler("random", random_command))
-    app.add_handler(CommandHandler("watchlist", watchlist_command))
-    app.add_handler(CommandHandler("clear_watchlist", clear_watchlist_command))
-    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("search", search_command))
+    application.add_handler(CommandHandler("popular", popular_command))
+    application.add_handler(CommandHandler("random", random_command))
+    application.add_handler(CommandHandler("watchlist", watchlist_command))
+    application.add_handler(CommandHandler("clear_watchlist", clear_watchlist_command))
+
     # Message and callback handlers
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(handle_callback_query))
-    app.add_handler(CallbackQueryHandler(add_to_watchlist_callback, pattern=r"^addfav:"))
-    
-    print("🎬 CineBot is running...")
-    print("✅ Available features:")
-    print("   • Movie search with detailed information")
-    print("   • Popular movie suggestions")
-    print("   • Genre-based browsing")
-    print("   • Random movie suggestions")
-    print("   • Personal watchlist management")
-    print("   • Interactive inline keyboards")
-    print("   • IMDb and YouTube trailer links")
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CallbackQueryHandler(handle_callback_query))
+    application.add_handler(CallbackQueryHandler(add_to_watchlist_callback, pattern=r"^addfav:"))
 
-    # Webhook vs Polling logic
+    # Flask app for webhook
+    flask_app = Flask(__name__)
+
+    @flask_app.route(f"/webhook/{TELEGRAM_TOKEN}", methods=["POST"])
+    def webhook():
+        if request.method == "POST":
+            update = telegram.Update.de_json(request.get_json(force=True), application.bot)
+            asyncio.run(application.process_update(update))
+            return Response("ok", status=200)
+        else:
+            return Response("not found", status=404)
+
+    # Set webhook
     WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://telegrambot-53po.onrender.com')
-    PORT = int(os.environ.get('PORT', 10000))
+    application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}")
 
-    if WEBHOOK_URL:
-        print(f"🚀 Starting with webhook at {WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}",
-            drop_pending_updates=True
-        )
-    else:
-        print("🚀 Starting with polling mode (no WEBHOOK_URL set)")
-        app.run_polling(drop_pending_updates=True)
+    print("🎬 CineBot is running with Flask webhook server...")
+    flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
 if __name__ == "__main__":
     main()
