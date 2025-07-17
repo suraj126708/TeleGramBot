@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from flask import Flask, request, Response
 import telegram
 import logging
+import threading
 
 # Configuration
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -603,6 +604,13 @@ async def add_to_watchlist_callback(update: Update, context: ContextTypes.DEFAUL
             user_favs.add(imdb_id)
             await query.answer("Added to your watchlist! ⭐", show_alert=True)
 
+# Create a single event loop for the whole app
+loop = asyncio.new_event_loop()
+
+def run_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
 # Main function
 def main():
     """Main function to run the bot"""
@@ -638,7 +646,9 @@ def main():
         if request.method == "POST":
             update = telegram.Update.de_json(request.get_json(force=True), application.bot)
             try:
-                asyncio.run(application.process_update(update))
+                # Schedule the coroutine in the global event loop
+                future = asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
+                future.result()  # Wait for completion and raise exceptions if any
                 return Response("ok", status=200)
             except Exception as e:
                 print("Webhook error:", e)
@@ -656,10 +666,13 @@ def main():
     async def setup():
         await application.initialize()
         await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}")
-    asyncio.run(setup())
+    loop.run_until_complete(setup())
 
     print("🎬 CineBot is running with Flask webhook server...")
     print("# For production, consider using a WSGI server like gunicorn or waitress instead of Flask's built-in server.")
+
+    # Start the event loop in a background thread before starting Flask
+    threading.Thread(target=run_loop, args=(loop,), daemon=True).start()
     flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
 if __name__ == "__main__":
