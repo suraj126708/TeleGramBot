@@ -636,8 +636,22 @@ def main():
     print("   • Personal watchlist management")
     print("   • Interactive inline keyboards")
     print("   • IMDb and YouTube trailer links")
-    
-    app.run_polling(drop_pending_updates=True)
+
+    # Webhook vs Polling logic
+    WEBHOOK_URL = os.environ.get('WEBHOOK_URL', 'https://telegrambot-53po.onrender.com')
+    PORT = int(os.environ.get('PORT', 10000))
+
+    if WEBHOOK_URL:
+        print(f"🚀 Starting with webhook at {WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{WEBHOOK_URL}/webhook/{TELEGRAM_TOKEN}",
+            drop_pending_updates=True
+        )
+    else:
+        print("🚀 Starting with polling mode (no WEBHOOK_URL set)")
+        app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
